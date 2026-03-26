@@ -2,11 +2,8 @@ import prisma from "@/lib/db";
 import fs from "fs/promises";
 
 
-const PRIZES: Record<number, number> = {
-    3: 50,
-    4: 250,
-    5: 2500,
-};
+// Prizes are dynamically calculated based on total jackpot.
+// Subscriptions contribute to the jackpot: ((50 - charityContribution) / 100) * 8999
 
 class AdminService {
     // ─── Users ────────────────────────────────────────────────
@@ -64,26 +61,61 @@ class AdminService {
             },
         });
 
-        const winnerData: {
-            userId: string;
-            drawId: string;
-            matchCount: number;
-            prize: number;
-            status: string;
-        }[] = [];
+        const winnerCandidates = [];
 
         for (const user of users) {
             const matchCount = user.scores.filter((s) => drawnSet.has(s.value)).length;
             if (matchCount >= 3) {
-                winnerData.push({
+                winnerCandidates.push({
                     userId: user.id,
                     drawId,
                     matchCount,
-                    prize: PRIZES[matchCount] ?? 0,
-                    status: "pending",
                 });
             }
         }
+
+        const categoryCounts = { 3: 0, 4: 0, 5: 0 };
+        for (const w of winnerCandidates) {
+            if (w.matchCount === 3) categoryCounts[3]++;
+            if (w.matchCount === 4) categoryCounts[4]++;
+            if (w.matchCount === 5) categoryCounts[5]++;
+        }
+
+        // Dynamically calculate the total jackpot
+        const activeUsers = await prisma.user.findMany({
+            where: { isSubscribed: true },
+            select: { charityContribution: true }
+        });
+
+        const submoney = 8999;
+        let totalJackpot = 0;
+        for (const u of activeUsers) {
+            const drawContribution = ((50 - u.charityContribution) / 100) * submoney;
+            if (drawContribution > 0) {
+                totalJackpot += drawContribution;
+            }
+        }
+
+        // Tiers: 3 matches = 25%, 4 = 35%, 5 = 40%
+        const tierPrizes = {
+            3: totalJackpot * 0.25,
+            4: totalJackpot * 0.35,
+            5: totalJackpot * 0.40,
+        };
+
+        const winnerData = winnerCandidates.map(w => {
+            const tierPrize = tierPrizes[w.matchCount as keyof typeof tierPrizes] ?? 0;
+            const count = categoryCounts[w.matchCount as keyof typeof categoryCounts] || 1;
+            const dividedPrize = Number((tierPrize / count).toFixed(2));
+
+            return {
+                userId: w.userId,
+                drawId: w.drawId,
+                matchCount: w.matchCount,
+                prize: dividedPrize,
+                status: "pending",
+            };
+        });
 
         // Atomically publish + create winners
         await prisma.$transaction([

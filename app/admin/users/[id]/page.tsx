@@ -97,14 +97,23 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
         e.preventDefault();
         setActingScore("new");
         try {
-            await fetch(`/api/admin/users/${id}/scores`, {
+            const res = await fetch(`/api/admin/users/${id}/scores`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ value: parseInt(newScoreVal), date: newScoreDate })
             });
+            
+            if (!res.ok) {
+                const errorData = await res.json();
+                alert("Failed to add score: " + (errorData.error || "Unknown error"));
+                return;
+            }
+            
             setNewScoreVal("");
             setNewScoreDate("");
             fetchUser();
+        } catch (err) {
+            alert("Error adding score");
         } finally {
             setActingScore(null);
         }
@@ -211,7 +220,7 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
                             </div>
                             <div className="flex-1">
                                 <label className="block text-xs text-text-secondary mb-1">Date</label>
-                                <input required type="date" value={newScoreDate} onChange={e => setNewScoreDate(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent-gold" />
+                                <input required type="date" value={newScoreDate} onChange={e => setNewScoreDate(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent-gold" style={{ colorScheme: "dark" }} />
                             </div>
                             <button type="submit" disabled={actingScore === "new"} className="btn-secondary h-[38px] px-4 font-medium !min-w-0">
                                 <span>{actingScore === "new" ? "..." : "Add"}</span>

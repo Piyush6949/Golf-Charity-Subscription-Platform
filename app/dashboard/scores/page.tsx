@@ -13,20 +13,25 @@ interface ScoreEntry {
 
 export default function ScoresPage() {
     const [scores, setScores] = useState<ScoreEntry[]>([]);
+    const [isSubscribed, setIsSubscribed] = useState(false);
     const revealRef = useReveal([scores]);
 
     const [newScore, setNewScore] = useState("");
     const [newDate, setNewDate] = useState("");
     const [loading, setLoading] = useState(true);
 
-    async function fetchScores() {
+    async function fetchScoresAndUser() {
         try {
-            const res = await fetch("/api/score", {
-                method: "GET",
-                credentials: "include",
-            });
-            const data = await res.json();
-            setScores(data);
+            const [scoresRes, userRes] = await Promise.all([
+                fetch("/api/score", { method: "GET", credentials: "include" }),
+                fetch("/api/user", { method: "GET", credentials: "include" })
+            ]);
+            
+            const scoresData = await scoresRes.json();
+            const userData = await userRes.json();
+            
+            setScores(scoresData);
+            setIsSubscribed(userData?.isSubscribed || false);
         } catch (err) {
             console.error(err);
         } finally {
@@ -36,7 +41,7 @@ export default function ScoresPage() {
 
     useEffect(() => {
         setLoading(true);
-        fetchScores();
+        fetchScoresAndUser();
     }, []);
 
     const handleAddScore = async (e: React.SubmitEvent) => {
@@ -72,7 +77,10 @@ export default function ScoresPage() {
             const newEntry = await res.json();
 
             //  Update UI instantly
-            fetchScores();
+            setScores(prev => {
+                const updated = [newEntry, ...prev].slice(0, 5);
+                return updated.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            });
             setNewScore("");
             setNewDate("");
         } catch (err) {
@@ -145,45 +153,48 @@ export default function ScoresPage() {
                 <div className="lg:col-span-2 space-y-4">
                     <div className="flex items-center justify-between mb-2 reveal delay-300">
                         <h3 className="text-lg font-semibold">Your Active Numbers</h3>
-                        {(scores.length >= 5) ? <span className="text-xs font-mono bg-surface border border-border px-2 py-1 rounded text-accent-emerald">Rolling 5</span> : <span className="text-xs font-mono bg-surface border border-border px-2 py-1 rounded text-red-500">Add more scores to be eligible for the draw</span>}
+                        {(scores.length >= 5 && isSubscribed) ? <span className="text-xs font-mono bg-surface border border-border px-2 py-1 rounded text-accent-emerald">Rolling 5</span> : <span className="text-xs font-mono bg-surface border border-border px-2 py-1 rounded text-red-500">Add 5 scores and Subscribe to be eligible for the draw</span>}
                     </div>
 
                     <div className="grid gap-4">
-                        {scores.map((score, index) => (
-                            <div
-                                key={score.id}
-                                className={`glass-card p-4 flex items-center justify-between reveal delay-${(index + 3) * 100} transition-all duration-300 hover:border-accent-emerald/30 group`}
-                            >
-                                <div className="flex items-center gap-4">
-                                    {/* Position Badge */}
-                                    <div className="w-8 h-8 rounded bg-background border border-border flex items-center justify-center text-xs font-mono text-text-muted">
-                                        #{index + 1}
-                                    </div>
+                        {scores.map((score, index) => {
+                            const isActive = scores.length >= 5 && isSubscribed;
+                            return (
+                                <div
+                                    key={score.id}
+                                    className={`glass-card p-4 flex items-center justify-between reveal delay-${(index + 3) * 100} transition-all duration-300 ${isActive ? "hover:border-accent-emerald/30 group" : ""}`}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        {/* Position Badge */}
+                                        <div className="w-8 h-8 rounded bg-background border border-border flex items-center justify-center text-xs font-mono text-text-muted">
+                                            #{index + 1}
+                                        </div>
 
-                                    {/* Score */}
-                                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[rgba(16,185,129,0.1)] to-[rgba(6,182,212,0.1)] border border-accent-emerald/20 flex flex-col items-center justify-center group-hover:from-accent-emerald group-hover:to-accent-teal transition-all duration-500 shadow-[0_0_15px_rgba(16,185,129,0.1)] group-hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-                                        <span className="text-xl font-bold group-hover:text-black">{score.value}</span>
-                                    </div>
+                                        {/* Score */}
+                                        <div className={`w-16 h-16 rounded-full flex flex-col items-center justify-center transition-all duration-500 ${isActive ? "bg-gradient-to-br from-[rgba(16,185,129,0.1)] to-[rgba(6,182,212,0.1)] border border-accent-emerald/20 group-hover:from-accent-emerald group-hover:to-accent-teal shadow-[0_0_15px_rgba(16,185,129,0.1)] group-hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]" : "bg-surface border border-border"}`}>
+                                            <span className={`text-xl font-bold ${isActive ? "group-hover:text-black" : "text-text-muted"}`}>{score.value}</span>
+                                        </div>
 
-                                    {/* Details */}
-                                    <div>
-                                        <div className="font-semibold text-lg">Stableford Round</div>
-                                        <div className="text-sm text-text-secondary flex items-center gap-2">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                                            </svg>
-                                            {new Date(score.date).toDateString()}
+                                        {/* Details */}
+                                        <div>
+                                            <div className="font-semibold text-lg">Stableford Round</div>
+                                            <div className="text-sm text-text-secondary flex items-center gap-2">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                                                </svg>
+                                                {new Date(score.date).toDateString()}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* Status */}
-                                <div className="hidden sm:flex items-center gap-2">
-                                    {(scores.length >= 5) ? <span className="w-2 h-2 rounded-full bg-accent-emerald"></span> : <span className="w-2 h-2 rounded-full bg-red-500"></span>}
-                                    {(scores.length >= 5) ? <span className="text-xs text-text-muted">Active for Draw</span> : <span className="text-xs text-text-muted">Not Active for Draw</span>}
+                                    {/* Status */}
+                                    <div className="hidden sm:flex items-center gap-2">
+                                        {isActive ? <span className="w-2 h-2 rounded-full bg-accent-emerald"></span> : <span className="w-2 h-2 rounded-full bg-red-500"></span>}
+                                        {isActive ? <span className="text-xs text-text-muted">Active for Draw</span> : <span className="text-xs text-text-muted">Inactive for Draw</span>}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         {/* Empty slots if less than 5 */}
                         {Array.from({ length: 5 - scores.length }).map((_, idx) => (

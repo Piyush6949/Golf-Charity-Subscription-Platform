@@ -37,6 +37,7 @@ export default function WinningsPage() {
     const [history, setHistory] = useState<Draw[]>([]);
     const [jackpot, setJackpot] = useState<number>(0);
     const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
     const revealRef = useReveal([history]);
 
     useEffect(() => {
@@ -62,6 +63,37 @@ export default function WinningsPage() {
         }
         fetchDrawsAndJackpot();
     }, []);
+
+    async function handleUploadProof(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const file = formData.get("proof") as File;
+        if (!file || file.size === 0) {
+            alert("Please select a file first");
+            return;
+        }
+
+        setUploading(true);
+        try {
+            const res = await fetch("/api/user/upload-proof", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                alert("Upload failed: " + (errorData.error || "Unknown error"));
+                return;
+            }
+
+            alert("Proof uploaded successfully! It is now under review.");
+            window.location.reload();
+        } catch (error) {
+            alert("Upload failed. Please try again.");
+        } finally {
+            setUploading(false);
+        }
+    }
 
     const dynamicPrizeMap: Record<number, string> = {
         3: `₹${(jackpot * 0.25).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
@@ -205,7 +237,7 @@ export default function WinningsPage() {
                             </p>
                         </div>
                     </div>
-                    <form action="/api/user/upload-proof" method="POST" encType="multipart/form-data">
+                    <form onSubmit={handleUploadProof}>
                     <label className="border-2 border-dashed border-border hover:border-accent-gold/50 transition-colors rounded-xl p-8 text-center cursor-pointer bg-surface flex flex-col items-center gap-3">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted">
                             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
@@ -214,7 +246,9 @@ export default function WinningsPage() {
                         <div className="text-xs text-text-muted">JPG, PNG, PDF (max 5MB)</div>
                         <input type="file" name="proof" accept="image/*,.pdf" />
                     </label>
-                        <button className="btn-primary px-6 py-2 text-sm" type="submit">Upload</button>
+                        <button className="btn-primary px-6 py-2 text-sm mt-4" type="submit" disabled={uploading}>
+                            {uploading ? "Uploading..." : "Upload Proof"}
+                        </button>
                     </form>
                 </div>
             )}

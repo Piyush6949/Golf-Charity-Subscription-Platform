@@ -26,8 +26,7 @@ export async function POST(req: NextRequest) {
     if (!(await requireAdmin(req))) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    // const numbers = randomise();
-    const numbers = [1,2,3,6,7];
+    const numbers = randomise();
 
     const draw = await admin.createDraw(numbers);
     return NextResponse.json(draw, { status: 201 });
